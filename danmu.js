@@ -10667,12 +10667,11 @@ function src_object_spread_props(e, t) {
 }
 let widgetVersion = "0.15.1";
 WidgetMetadata = {
-    version: "1.0.0",
     id: "danmu",
     title: "通用弹幕",
     description: "从全平台获取弹幕",
     author: "，",
-    version: widgetVersion,
+    version: "1.0.0",
     site: "https://github.com/h05n/ForwardWidgets",
     requiredVersion: "0.0.1",
     globalParams: [
