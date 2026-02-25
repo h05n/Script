@@ -1,66 +1,68 @@
 name: 自动同步构建
 
 on:
+  # 你改了设置文件或者脚本，保存后立刻开工
   push:
     paths:
       - '设置.json'
       - '自动加工器.js'
+  # 可以在 Actions 页面手动点按钮跑
   workflow_dispatch:
+  # 每小时 0 分查一次原作者更新
   schedule:
     - cron: "0 * * * *"
 
 permissions:
   contents: write
 
+# 如果上一个还在跑，又来了个新的，把旧的干掉，节省资源
 concurrency:
-  group: sync-v9-stable
+  group: sync-v13
   cancel-in-progress: true
 
 jobs:
   automation_job:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出仓库
+      - name: 1. 检出仓库代码
         uses: actions/checkout@v4
 
-      - name: 2. 准备 Node 环境
+      - name: 2. 初始化运行环境
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 3. 同步上游代码并验证
+      - name: 3. 下载原版代码并检查
         shell: bash
         run: |
           mkdir -p temp_box
-          # 使用主备双节点下载
+          # 尝试下载，失败了会重试
           if ! curl -fsSL -L --retry 5 "https://unpkg.com/@forward-widget/danmu-universe" -o "temp_box/origin.js"; then
             curl -fsSL -L --retry 3 "https://cdn.jsdelivr.net/npm/@forward-widget/danmu-universe" -o "temp_box/origin.js"
           fi
           
-          # 验证标识符
+          # 简单搜一下关键字，确定没下错成报错页面
           if ! grep -q "WidgetMetadata" temp_box/origin.js; then
-            echo "同步内容损坏：未发现关键配置标识。"
+            echo "代码内容不对劲，先不更新了。"
             exit 1
           fi
 
-      - name: 4. 执行代码加工
-        run: |
-          # 将下载的源码加工为根目录下的 danmu.js
-          node 自动加工器.js temp_box/origin.js danmu.js 设置.json
+      - name: 4. 把原版加工成 danmu.js
+        run: node 自动加工器.js temp_box/origin.js danmu.js 设置.json
 
-      - name: 5. 提交并同步至仓库
+      - name: 5. 如果内容变了，才提交
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add danmu.js
           
-          # 仅在 danmu.js 内容有实际变动时才提交
+          # 内容真有变化才 commit，防止刷屏
           if ! git diff --staged --quiet; then
-            git commit -m "chore: 自动同步上游更新并应用自定义配置"
+            git commit -m "自动更新：成品 danmu.js 已生成"
             git push
           else
-            echo "内容未发生变动，跳过本次推送。"
+            echo "跟上次一样，没变化，不推了。"
           fi
           
           rm -rf temp_box
