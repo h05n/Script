@@ -1,72 +1,66 @@
 name: 自动同步构建
 
 on:
-  # 监听设置或加工脚本的提交变动
   push:
     paths:
       - '设置.json'
       - '自动加工器.js'
-  # 允许手动在 Actions 界面点击执行
   workflow_dispatch:
-  # 按照要求：每 1 小时自动运行一次
   schedule:
     - cron: "0 * * * *"
 
 permissions:
   contents: write
 
-# 并发控制：新任务启动时自动终止旧的同组任务
 concurrency:
-  group: sync-v7-final-check
+  group: sync-v9-stable
   cancel-in-progress: true
 
 jobs:
   automation_job:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出本地仓库代码
+      - name: 1. 检出仓库
         uses: actions/checkout@v4
 
-      - name: 2. 安装 Node.js 环境
+      - name: 2. 准备 Node 环境
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 3. 同步上游代码并执行安全校验
+      - name: 3. 同步上游代码并验证
         shell: bash
         run: |
           mkdir -p temp_box
-          echo "尝试获取上游最新源码..."
-          
-          # 双源冗余下载
+          # 使用主备双节点下载
           if ! curl -fsSL -L --retry 5 "https://unpkg.com/@forward-widget/danmu-universe" -o "temp_box/origin.js"; then
             curl -fsSL -L --retry 3 "https://cdn.jsdelivr.net/npm/@forward-widget/danmu-universe" -o "temp_box/origin.js"
           fi
           
-          # 安全自查：文件必须包含核心标识且长度不得小于 1000 字节
-          if [[ ! -s "temp_box/origin.js" ]] || ! grep -q "WidgetMetadata" temp_box/origin.js; then
-            echo "同步失败：源码无效或不完整，取消构建以保护现有代码。"
+          # 验证标识符
+          if ! grep -q "WidgetMetadata" temp_box/origin.js; then
+            echo "同步内容损坏：未发现关键配置标识。"
             exit 1
           fi
 
-      - name: 4. 执行自动加工
+      - name: 4. 执行代码加工
         run: |
-          # 将 origin.js 处理后输出为 danmu.js
+          # 将下载的源码加工为根目录下的 danmu.js
           node 自动加工器.js temp_box/origin.js danmu.js 设置.json
 
-      - name: 5. 提交变动至仓库
+      - name: 5. 提交并同步至仓库
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add danmu.js
           
-          # 仅在 danmu.js 产生实质性字符变动时执行推送
+          # 仅在 danmu.js 内容有实际变动时才提交
           if ! git diff --staged --quiet; then
-            git commit -m "chore: 自动同步上游更新并重新生成成品"
+            git commit -m "chore: 自动同步上游更新并应用自定义配置"
             git push
           else
-            echo "自查完毕：内容无变化，跳过推送动作。"
+            echo "内容未发生变动，跳过本次推送。"
           fi
           
           rm -rf temp_box
