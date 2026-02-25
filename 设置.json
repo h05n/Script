@@ -1,0 +1,9 @@
+{
+  "id": "danmu",
+  "title": "通用弹幕",
+  "version": "1.0.0",
+  "description": "从全平台获取弹幕",
+  "author": "，",
+  "site": "https://github.com/h05n/ForwardWidgets",
+  "requiredVersion": "0.0.1"
+}
